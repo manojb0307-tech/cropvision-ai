@@ -1773,7 +1773,7 @@ app.post('/api/analyze', async (req, res) => {
     return res.json({
       diagnosis,
       source: 'local',
-      engine: 'PlantVision ULTRA v4.0',
+      engine: 'PlantVision ULTRA v5.0',
       imageAnalysis: {
         resolution: imageAnalysis.resolution,
         format: imageAnalysis.format,
@@ -1792,7 +1792,7 @@ app.post('/api/analyze', async (req, res) => {
         severity: diag.severity,
       },
       cropDbData: cropDbData || undefined,
-      note: 'Configure GEMINI_API_KEY in .env for AI-powered analysis. This is the PlantVision ULTRA v4.0 computer vision engine.',
+      note: 'Configure GEMINI_API_KEY in .env for AI-powered analysis. This is the PlantVision ULTRA v5.0 computer vision engine.',
     });
   } catch (err) {
     console.error('[/api/analyze] Unhandled error:', err);
