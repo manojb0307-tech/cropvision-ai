@@ -1,0 +1,19 @@
+node_modules/
+build/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Exclude large image files but keep SQLite databases
+test-images/rice-diseases/**/*.jpg
+test-images/rice-diseases/**/*.jpeg
+test-images/rice-diseases/**/*.png
+test-images/wheat-diseases/**/*.jpg
+test-images/maize-diseases/**/*.jpg
+test-images/rice-diseases-extracted/
+out.log
+err.log
+server_error.log
+server_output.log
