@@ -23,6 +23,7 @@ import { NPKScanner } from './components/NPKScanner';
 import { PlantXRay } from './components/PlantXRay';
 import { StickyTrapAnalyzer } from './components/StickyTrapAnalyzer';
 import { EdgeAIScanner } from './components/EdgeAIScanner';
+import { RecoveryJournal } from './components/RecoveryJournal';
 
 import { Crop, DiseaseDiagnosis, MenuModalPage } from './types';
 import { analyzePlantImage, SAMPLE_DIAGNOSES } from './data/sampleDiagnoses';
@@ -171,6 +172,11 @@ export default function App() {
             {/* 3.10. Offline Edge-AI Browser Scanner */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <EdgeAIScanner />
+            </section>
+
+            {/* 3.11. Time-Lapse Recovery Journal */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <RecoveryJournal />
             </section>
 
             {/* 4. Major Crops Section */}
