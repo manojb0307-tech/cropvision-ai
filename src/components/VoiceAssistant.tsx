@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, Globe, Loader2, X, AlertTriangle } from 'lucide-react';
-import { chatWithAIRemote } from '../lib/api';
+import { Mic, Volume2, VolumeX, Globe, Loader2, X, AlertTriangle, Upload, FileAudio, Send } from 'lucide-react';
+import { chatWithAIRemote, sendVoiceAudio } from '../lib/api';
 import { ChatMessage } from '../types';
 
 interface VoiceAssistantProps {
@@ -21,21 +21,33 @@ const LANGUAGES = [
   { code: 'pa-IN', name: 'Punjabi', flag: 'PA' },
 ];
 
+function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      const base64 = dataUrl.split(',')[1] || '';
+      resolve({ base64, mimeType: file.type || 'audio/webm' });
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose }) => {
-  const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [textInput, setTextInput] = useState('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
-  const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const historyRef = useRef<ChatMessage[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addDebug = useCallback((msg: string) => {
     setDebugInfo(prev => [...prev.slice(-6), `${new Date().toLocaleTimeString()}: ${msg}`]);
@@ -55,14 +67,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     if (typeof window !== 'undefined') {
       synthRef.current = window.speechSynthesis;
     }
-    return () => {
-      try { recognitionRef.current?.abort(); } catch {}
-      synthRef.current?.cancel();
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach(t => t.stop());
-        micStreamRef.current = null;
-      }
-    };
+    return () => { synthRef.current?.cancel(); };
   }, []);
 
   const speak = useCallback((text: string, lang: string) => {
@@ -79,10 +84,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     synthRef.current.speak(utterance);
   }, []);
 
-  const processQuery = useCallback(async (query: string, lang: string) => {
+  const processTextQuery = useCallback(async (query: string) => {
     if (!query.trim()) return;
     setProcessing(true);
     setError(null);
+    addDebug('text query: ' + query.substring(0, 40));
 
     const userMsg: ChatMessage = {
       id: `v-${Date.now()}`,
@@ -101,126 +107,79 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
         timestamp: new Date().toLocaleTimeString(),
       };
       setMessages(prev => [...prev, botMsg]);
-      speak(reply, lang);
+      speak(reply, selectedLang.code);
     } catch {
-      const fallback = 'Sorry, I could not process your request. Please try again.';
+      const fallback = 'Sorry, could not process your request. Please try again.';
       setMessages(prev => [...prev, {
         id: `v-err-${Date.now()}`,
         sender: 'bot',
         text: fallback,
         timestamp: new Date().toLocaleTimeString(),
       }]);
-      speak(fallback, lang);
+      speak(fallback, selectedLang.code);
     } finally {
       setProcessing(false);
     }
-  }, [speak]);
+  }, [selectedLang, speak, addDebug]);
 
-  const startListening = useCallback(async () => {
+  const processAudioFile = useCallback(async (file: File) => {
+    setProcessing(true);
     setError(null);
-    setTranscript('');
-    setDebugInfo([]);
-    synthRef.current?.cancel();
-    setIsSpeaking(false);
+    addDebug('uploading: ' + file.name + ' (' + (file.size / 1024).toFixed(0) + 'KB)');
 
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      setError('Speech recognition not supported. Please use Chrome or Edge.');
-      addDebug('SpeechRecognition API NOT found');
-      return;
-    }
-    addDebug('SpeechRecognition API found');
+    const userMsg: ChatMessage = {
+      id: `v-${Date.now()}`,
+      sender: 'user',
+      text: `[Audio: ${file.name}]`,
+      timestamp: new Date().toLocaleTimeString(),
+    };
+    setMessages(prev => [...prev, userMsg]);
 
     try {
-      recognitionRef.current?.abort();
-    } catch {}
+      const { base64, mimeType } = await fileToBase64(file);
+      addDebug('audio ready, sending to server...');
 
-    // Step 1: Explicitly request mic access via getUserMedia first
-    try {
-      addDebug('requesting mic via getUserMedia...');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      micStreamRef.current = stream;
-      addDebug('mic stream acquired, tracks: ' + stream.getTracks().length);
-      // Stop the stream tracks — SpeechRecognition will re-acquire its own
-      stream.getTracks().forEach(t => t.stop());
-      micStreamRef.current = null;
+      const reply = await sendVoiceAudio(base64, mimeType, [...historyRef.current, userMsg], selectedLang.code);
+      const botMsg: ChatMessage = {
+        id: `v-${Date.now() + 1}`,
+        sender: 'bot',
+        text: reply,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setMessages(prev => [...prev, botMsg]);
+      addDebug('response received, speaking...');
+      speak(reply, selectedLang.code);
     } catch (err: any) {
-      addDebug('getUserMedia failed: ' + err.name + ' - ' + err.message);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setError('Microphone permission denied. Go to browser settings → Microphone → Allow this site, then refresh.');
-      } else if (err.name === 'NotFoundError') {
-        setError('No microphone found on this device.');
-      } else {
-        setError('Mic error: ' + err.name + ' - ' + err.message);
-      }
-      return;
+      addDebug('audio error: ' + (err.message || 'unknown'));
+      const fallback = 'Could not process audio. Please try again or type your question.';
+      setMessages(prev => [...prev, {
+        id: `v-err-${Date.now()}`,
+        sender: 'bot',
+        text: fallback,
+        timestamp: new Date().toLocaleTimeString(),
+      }]);
+      speak(fallback, selectedLang.code);
+    } finally {
+      setProcessing(false);
+      setSelectedFile(null);
     }
+  }, [selectedLang, speak, addDebug]);
 
-    // Step 2: Now start SpeechRecognition
-    try {
-      const recognition = new SR();
-      recognition.lang = selectedLang.code;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        addDebug('recognition listening (lang=' + selectedLang.code + ')');
-        setIsListening(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        let finalT = '';
-        let interimT = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const t = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalT += t;
-          } else {
-            interimT += t;
-          }
-        }
-        const display = finalT || interimT;
-        setTranscript(display);
-        if (finalT) {
-          addDebug('heard: ' + finalT.substring(0, 60));
-          processQuery(finalT, selectedLang.code);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        addDebug('recognition error: ' + event.error);
-        if (event.error === 'not-allowed') {
-          setError('Mic blocked. Go to edge://settings/content/microphone → Remove this site from Block list → Refresh page.');
-        } else if (event.error === 'no-speech') {
-          setError('No speech detected. Tap mic and try again.');
-        } else if (event.error === 'network') {
-          setError('Network error during speech recognition.');
-        } else if (event.error !== 'aborted') {
-          setError('Speech error: ' + event.error);
-        }
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        addDebug('recognition ended');
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-      addDebug('calling start()...');
-    } catch (e: any) {
-      addDebug('start exception: ' + (e.message || e));
-      setError('Failed: ' + (e.message || 'unknown'));
-      setIsListening(false);
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      processAudioFile(file);
     }
-  }, [selectedLang, processQuery, addDebug]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [processAudioFile]);
 
-  const stopListening = useCallback(() => {
-    try { recognitionRef.current?.stop(); } catch {}
-    setIsListening(false);
-  }, []);
+  const handleTextSubmit = useCallback(() => {
+    if (textInput.trim() && !processing) {
+      processTextQuery(textInput);
+      setTextInput('');
+    }
+  }, [textInput, processing, processTextQuery]);
 
   const stopSpeaking = useCallback(() => {
     synthRef.current?.cancel();
@@ -232,6 +191,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[85vh] flex flex-col">
+        {/* Header */}
         <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
             <Volume2 className="w-5 h-5" />
@@ -242,6 +202,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           </button>
         </div>
 
+        {/* Language Selector */}
         <div className="p-3 border-b border-slate-100 bg-slate-50 shrink-0">
           <div className="flex items-center space-x-2 overflow-x-auto pb-1">
             <Globe className="w-4 h-4 text-slate-400 shrink-0" />
@@ -262,12 +223,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           <p className="text-[10px] text-slate-500 mt-1">Speaking: {selectedLang.name}</p>
         </div>
 
+        {/* Conversation */}
         <div ref={chatEndRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
           {messages.length === 0 && !processing && (
             <div className="text-center text-slate-400 text-sm py-6">
-              <Mic className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="font-medium text-slate-500">Tap the mic and speak</p>
-              <p className="text-xs mt-1">Ask about any crop, disease, or fertilizer</p>
+              <FileAudio className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="font-medium text-slate-500">Upload an audio file</p>
+              <p className="text-xs mt-1">Record on your phone, then upload here. Or type below.</p>
             </div>
           )}
 
@@ -289,20 +251,15 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
             <div className="flex justify-start">
               <div className="bg-slate-100 px-3 py-2 rounded-2xl rounded-bl-sm flex items-center space-x-2">
                 <Loader2 className="w-3 h-3 text-emerald-600 animate-spin" />
-                <span className="text-xs text-slate-500">Thinking...</span>
+                <span className="text-xs text-slate-500">
+                  {selectedFile ? 'Processing audio...' : 'Thinking...'}
+                </span>
               </div>
             </div>
           )}
         </div>
 
-        {transcript && (
-          <div className="px-4 pb-2 shrink-0">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-xs text-emerald-700 italic">
-              &quot;{transcript}&quot;
-            </div>
-          </div>
-        )}
-
+        {/* Error */}
         {error && (
           <div className="px-4 pb-2 shrink-0">
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-2 text-[11px] text-amber-700 flex items-start space-x-2">
@@ -312,42 +269,80 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           </div>
         )}
 
+        {/* Debug Log */}
         {debugInfo.length > 0 && (
           <div className="px-4 pb-2 shrink-0">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 text-[9px] text-slate-500 font-mono max-h-20 overflow-y-auto">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 text-[9px] text-slate-500 font-mono max-h-16 overflow-y-auto">
               {debugInfo.map((d, i) => <div key={i}>{d}</div>)}
             </div>
           </div>
         )}
 
-        <div className="p-5 flex flex-col items-center space-y-3 shrink-0">
-          {isSpeaking && (
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        {/* Controls */}
+        <div className="p-4 space-y-3 shrink-0">
+          {/* Text Input */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleTextSubmit()}
+              placeholder="Type your question..."
+              disabled={processing}
+              className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+            />
             <button
-              onClick={stopSpeaking}
-              className="px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-600 text-xs font-semibold rounded-full cursor-pointer transition-colors flex items-center space-x-1.5"
+              onClick={handleTextSubmit}
+              disabled={processing || !textInput.trim()}
+              className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <VolumeX className="w-4 h-4" />
-              <span>Stop Speaking</span>
+              <Send className="w-4 h-4" />
             </button>
-          )}
+          </div>
 
-          <button
-            onClick={isListening ? stopListening : startListening}
-            disabled={processing}
-            className={`relative p-6 rounded-full shadow-xl transition-all cursor-pointer ${
-              isListening
-                ? 'bg-red-500 hover:bg-red-600 text-white scale-110 shadow-red-500/30'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/30'
-            } ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {isListening && (
-              <span className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-30" />
+          {/* Upload + Stop Speaking */}
+          <div className="flex items-center justify-center space-x-3">
+            {isSpeaking && (
+              <button
+                onClick={stopSpeaking}
+                className="px-3 py-2 bg-orange-100 hover:bg-orange-200 text-orange-600 text-[11px] font-semibold rounded-full cursor-pointer transition-colors flex items-center space-x-1"
+              >
+                <VolumeX className="w-3.5 h-3.5" />
+                <span>Stop</span>
+              </button>
             )}
-            {isListening ? <MicOff className="w-8 h-8 relative z-10" /> : <Mic className="w-8 h-8 relative z-10" />}
-          </button>
 
-          <p className="text-[11px] text-slate-400 font-medium">
-            {isListening ? 'Listening... speak now' : processing ? 'Processing...' : isSpeaking ? 'Speaking...' : 'Tap to speak'}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={processing}
+              className={`flex items-center space-x-2 px-5 py-3 rounded-full shadow-xl transition-all cursor-pointer ${
+                processing
+                  ? 'bg-slate-400 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30'
+              } text-white`}
+            >
+              {processing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Upload className="w-5 h-5" />
+              )}
+              <span className="text-xs font-semibold">
+                {processing ? 'Processing...' : 'Upload Audio'}
+              </span>
+            </button>
+          </div>
+
+          <p className="text-[10px] text-slate-400 text-center">
+            Record audio on your phone, then upload here. Or type above.
           </p>
         </div>
       </div>

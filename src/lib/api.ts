@@ -84,3 +84,30 @@ export async function chatWithAIRemote(message: string, history: ChatMessage[]):
   if (!reply) throw new Error('Empty AI reply');
   return reply;
 }
+
+interface VoiceResponse {
+  reply?: string;
+  source?: string;
+  error?: string;
+}
+
+/**
+ * Sends audio (base64) to the backend voice assistant endpoint.
+ * Gemini transcribes the audio and generates an AI response.
+ */
+export async function sendVoiceAudio(
+  audioBase64: string,
+  mimeType: string,
+  history: ChatMessage[],
+  lang: string
+): Promise<string> {
+  const result = await post<VoiceResponse>('/api/voice-assistant', {
+    audio: audioBase64,
+    mimeType,
+    history,
+    lang,
+  }, 90000);
+  const reply = result?.reply?.trim();
+  if (!reply) throw new Error('Empty voice reply');
+  return reply;
+}

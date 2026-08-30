@@ -1987,6 +1987,80 @@ app.post('/api/prognosis', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/voice-assistant — Server-side voice assistant
+// Accepts audio upload, transcribes via Gemini, returns AI response.
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/voice-assistant', async (req, res) => {
+  try {
+    const { audio, mimeType, history, lang } = req.body || {};
+
+    if (!audio || typeof audio !== 'string') {
+      return res.status(400).json({ error: 'audio (base64) is required.' });
+    }
+
+    const mimeTypeClean = mimeType || 'audio/webm';
+    const langName = lang || 'en-US';
+
+    // ── Try Gemini with audio input ──────────────────────────────────────
+    const ai = await getAI();
+    if (ai) {
+      try {
+        const recentHistory = Array.isArray(history) ? history.slice(-10) : [];
+        const contents = recentHistory
+          .filter((m) => m && typeof m.text === 'string' && m.text.trim())
+          .map((m) => ({
+            role: m.sender === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }],
+          }));
+
+        // Add the audio as inline data for Gemini
+        contents.push({
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeTypeClean,
+                data: audio,
+              },
+            },
+            {
+              text: 'This is a voice message from a farmer. Transcribe what they said, then respond as CropVision AI — a friendly expert farming assistant. Keep your reply practical, concise (under 150 words), and farmer-friendly. If the audio is unclear, say so politely.',
+            },
+          ],
+        });
+
+        const response = await ai.models.generateContent({
+          model: GEMINI_MODEL,
+          systemInstruction: CHAT_SYSTEM_PROMPT,
+          contents,
+        });
+
+        const responseText = typeof response.text === 'function'
+          ? await response.text()
+          : response.text;
+
+        const reply = (responseText || '').trim();
+        if (reply) {
+          return res.json({ reply, source: 'gemini-audio' });
+        }
+      } catch (geminiErr) {
+        console.error('[/api/voice-assistant] Gemini error:', geminiErr.message || geminiErr);
+      }
+    }
+
+    // ── Fallback: no Gemini, try to extract text from audio name/hint ────
+    return res.json({
+      reply: 'Voice processing requires Gemini AI. Please set GEMINI_API_KEY in your .env file, or type your question in the chat instead.',
+      source: 'no-ai',
+    });
+
+  } catch (err) {
+    console.error('Voice assistant error:', err.message);
+    res.status(500).json({ error: 'Voice processing failed.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // GET /api/health — Health Check
 // ═══════════════════════════════════════════════════════════════════════════════
 app.get('/api/health', (_req, res) => {
