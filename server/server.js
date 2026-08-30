@@ -22,11 +22,11 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { generateReply } from './agriMind.js';
 import { analyzePlantImage as visionAnalyze } from './detectionEngine.js';
-import { generatePrognosis } from './prognosis.js';
-import { generateOutbreakMapData, addOutbreakReport } from './outbreakMap.js';
-import { calculateCostEstimate } from './costEstimator.js';
-import { generateCropRotation } from './cropRotation.js';
-import { generateOrganicRecipe } from './organicRecipe.js';
+import { generatePrognosis } from './engines/diseasePrognosisEngine.js';
+import { generateOutbreakMapData, addOutbreakReport } from './engines/outbreakAlertEngine.js';
+import { calculateCostEstimate } from './engines/costEstimatorEngine.js';
+import { generateCropRotation } from './engines/cropRotationEngine.js';
+import { generateOrganicRecipe } from './engines/organicRecipeEngine.js';
 
 dotenv.config();
 
@@ -1993,6 +1993,14 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'CropVision API',
+    version: '2.0',
+    engines: {
+      diseasePrognosis: 'v2.0',
+      outbreakAlert: 'v2.0',
+      costEstimator: 'v2.0',
+      cropRotation: 'v2.0',
+      organicRecipe: 'v2.0',
+    },
     aiConfigured: Boolean(GEMINI_API_KEY),
     model: GEMINI_MODEL,
     localDiseaseCount: DISEASE_DB.length,
