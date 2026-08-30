@@ -17,6 +17,7 @@ import { SearchPage } from './components/SearchPage';
 import { InfoModal } from './components/InfoModal';
 import { Footer } from './components/Footer';
 import { OutbreakMap } from './components/OutbreakMap';
+import { VoiceAssistant } from './components/VoiceAssistant';
 
 import { Crop, DiseaseDiagnosis, MenuModalPage } from './types';
 import { analyzePlantImage, SAMPLE_DIAGNOSES } from './data/sampleDiagnoses';
@@ -30,6 +31,7 @@ export default function App() {
   const [scanningPreviewUrl, setScanningPreviewUrl] = useState<string | null>(null);
   const [menuModalPage, setMenuModalPage] = useState<MenuModalPage>(null);
   const [aiChatPrompt, setAiChatPrompt] = useState<string | null>(null);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
 
   // Scroll Helpers
   const scrollToScanner = () => {
@@ -162,6 +164,23 @@ export default function App() {
         initialPrompt={aiChatPrompt}
         onClearInitialPrompt={() => setAiChatPrompt(null)}
       />
+
+      {/* Voice Assistant Modal */}
+      <VoiceAssistant
+        isOpen={isVoiceOpen}
+        onClose={() => setIsVoiceOpen(false)}
+      />
+
+      {/* Floating Voice Button (Bottom-Left) */}
+      <button
+        onClick={() => setIsVoiceOpen(true)}
+        className="fixed bottom-6 left-6 z-40 p-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 cursor-pointer"
+        title="Voice Assistant"
+      >
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+      </button>
 
       {/* Modals & Overlays */}
       {/* Camera Capture Modal */}
