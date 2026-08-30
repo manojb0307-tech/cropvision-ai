@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url';
 import { generateReply } from './agriMind.js';
 import { analyzePlantImage as visionAnalyze } from './detectionEngine.js';
 import { generatePrognosis } from './prognosis.js';
+import { generateOutbreakMapData, addOutbreakReport } from './outbreakMap.js';
 
 dotenv.config();
 
@@ -1886,6 +1887,33 @@ app.post('/api/chat', async (req, res) => {
   } catch (err) {
     console.error('[/api/chat] Unhandled error:', err);
     return res.status(500).json({ error: 'Internal server error. Please try again.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /api/outbreak-map — Community Outbreak Alert Map Data
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/api/outbreak-map', (req, res) => {
+  try {
+    const { crop, state, disease } = req.query;
+    const data = generateOutbreakMapData({ crop, state, disease });
+    res.json(data);
+  } catch (err) {
+    console.error('Outbreak map error:', err.message);
+    res.status(500).json({ error: 'Failed to generate map data' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/outbreak-report — Submit a Community Disease Report
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/outbreak-report', (req, res) => {
+  try {
+    const report = addOutbreakReport(req.body || {});
+    res.json({ success: true, report });
+  } catch (err) {
+    console.error('Outbreak report error:', err.message);
+    res.status(500).json({ error: 'Failed to submit report' });
   }
 });
 

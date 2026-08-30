@@ -16,6 +16,7 @@ import { AIChatAssistant } from './components/AIChatAssistant';
 import { SearchPage } from './components/SearchPage';
 import { InfoModal } from './components/InfoModal';
 import { Footer } from './components/Footer';
+import { OutbreakMap } from './components/OutbreakMap';
 
 import { Crop, DiseaseDiagnosis, MenuModalPage } from './types';
 import { analyzePlantImage, SAMPLE_DIAGNOSES } from './data/sampleDiagnoses';
@@ -134,6 +135,11 @@ export default function App() {
               onSelectSampleDiagnosis={handleSelectSampleDiagnosis}
               onOpenCameraModal={() => setIsCameraModalOpen(true)}
             />
+
+            {/* 3.5. Community Outbreak Alert Map */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <OutbreakMap />
+            </section>
 
             {/* 4. Major Crops Section */}
             <MajorCropsSection
