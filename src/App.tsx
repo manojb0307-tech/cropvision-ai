@@ -137,6 +137,40 @@ export default function App() {
               onScrollToCrops={scrollToCrops}
             />
 
+            {/* Features Quick Navigation */}
+            <div className="bg-white border-y border-slate-200 sticky top-0 z-30">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center space-x-1 overflow-x-auto py-2 scrollbar-hide">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0 mr-1">Features:</span>
+                  {[
+                    { label: 'Disease Scanner', id: 'disease-scanner-section', icon: '🔍' },
+                    { label: 'Outbreak Map', id: 'section-outbreak-map', icon: '🗺️' },
+                    { label: 'Crop Rotation', id: 'section-crop-rotation', icon: '🔄' },
+                    { label: 'NPK Scanner', id: 'section-npk-scanner', icon: '🧪' },
+                    { label: 'Plant X-Ray', id: 'section-plant-xray', icon: '🔬' },
+                    { label: 'Sticky Trap', id: 'section-sticky-trap', icon: '🪤' },
+                    { label: 'Edge-AI Scanner', id: 'section-edge-ai', icon: '🤖' },
+                    { label: 'Recovery Journal', id: 'section-recovery', icon: '📔' },
+                    { label: 'All Crops', id: 'major-crops-section', icon: '🌾' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedDiagnosis(null);
+                        setTimeout(() => {
+                          document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 50);
+                      }}
+                      className="flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 text-[10px] font-bold rounded-full whitespace-nowrap transition-all cursor-pointer shrink-0"
+                    >
+                      <span>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* 3. Disease Detection Section (Compact Camera & Upload Cards) */}
             <DiseaseDetectionSection
               onStartAnalysis={handleStartAnalysis}
@@ -145,37 +179,37 @@ export default function App() {
             />
 
             {/* 3.5. Community Outbreak Alert Map */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="section-outbreak-map" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <OutbreakMap />
             </section>
 
             {/* 3.6. Crop Rotation & Companion Planting AI */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="section-crop-rotation" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <CropRotation />
             </section>
 
             {/* 3.7. NPK Chlorophyll Scanner */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="section-npk-scanner" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <NPKScanner />
             </section>
 
             {/* 3.8. AR Plant X-Ray & Education */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="section-plant-xray" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <PlantXRay />
             </section>
 
             {/* 3.9. Sticky-Trap Pest Vector Analyzer */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="section-sticky-trap" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <StickyTrapAnalyzer />
             </section>
 
             {/* 3.10. Offline Edge-AI Browser Scanner */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="section-edge-ai" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <EdgeAIScanner />
             </section>
 
             {/* 3.11. Time-Lapse Recovery Journal */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="section-recovery" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <RecoveryJournal />
             </section>
 
@@ -210,12 +244,13 @@ export default function App() {
       {/* Floating Voice Button (Bottom-Left) */}
       <button
         onClick={() => setIsVoiceOpen(true)}
-        className="fixed bottom-6 left-6 z-40 p-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-105 cursor-pointer"
-        title="Voice Assistant"
+        className="fixed bottom-6 left-6 z-50 flex items-center space-x-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-full shadow-2xl hover:shadow-emerald-500/40 transition-all hover:scale-105 cursor-pointer border-2 border-emerald-400"
+        title="Voice Assistant — Speak in 10 languages"
       >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
         </svg>
+        <span className="text-xs font-bold hidden sm:inline">Voice Assistant</span>
       </button>
 
       {/* Modals & Overlays */}
