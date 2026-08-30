@@ -7,6 +7,7 @@ import {
 import { DiseaseDiagnosis } from '../types';
 import { DiseasePrognosis } from './DiseasePrognosis';
 import { CostEstimator } from './CostEstimator';
+import { OrganicRecipe } from './OrganicRecipe';
 
 interface DiseaseResultViewProps {
   diagnosis: DiseaseDiagnosis;
@@ -333,6 +334,11 @@ export const DiseaseResultView: React.FC<DiseaseResultViewProps> = ({
             disease={diagnosis.diseaseName} 
             severity={diagnosis.severityLevel || 'Moderate'} 
           />
+        )}
+
+        {/* Organic Recipe Generator */}
+        {!diagnosis.isHealthy && (
+          <OrganicRecipe diseaseName={diagnosis.diseaseName} />
         )}
 
         {/* Bottom Call to Action */}

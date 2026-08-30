@@ -26,6 +26,7 @@ import { generatePrognosis } from './prognosis.js';
 import { generateOutbreakMapData, addOutbreakReport } from './outbreakMap.js';
 import { calculateCostEstimate } from './costEstimator.js';
 import { generateCropRotation } from './cropRotation.js';
+import { generateOrganicRecipe } from './organicRecipe.js';
 
 dotenv.config();
 
@@ -1889,6 +1890,21 @@ app.post('/api/chat', async (req, res) => {
   } catch (err) {
     console.error('[/api/chat] Unhandled error:', err);
     return res.status(500).json({ error: 'Internal server error. Please try again.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/organic-recipe — AI Organic Recipe Generator
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/organic-recipe', (req, res) => {
+  try {
+    const { diseaseName, availableIngredients } = req.body || {};
+    if (!diseaseName) return res.status(400).json({ error: 'diseaseName is required' });
+    const result = generateOrganicRecipe(diseaseName, availableIngredients || []);
+    res.json(result);
+  } catch (err) {
+    console.error('Organic recipe error:', err.message);
+    res.status(500).json({ error: 'Recipe generation failed' });
   }
 });
 
