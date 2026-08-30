@@ -21,6 +21,7 @@ import { VoiceAssistant } from './components/VoiceAssistant';
 import { CropRotation } from './components/CropRotation';
 import { NPKScanner } from './components/NPKScanner';
 import { PlantXRay } from './components/PlantXRay';
+import { StickyTrapAnalyzer } from './components/StickyTrapAnalyzer';
 
 import { Crop, DiseaseDiagnosis, MenuModalPage } from './types';
 import { analyzePlantImage, SAMPLE_DIAGNOSES } from './data/sampleDiagnoses';
@@ -159,6 +160,11 @@ export default function App() {
             {/* 3.8. AR Plant X-Ray & Education */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <PlantXRay />
+            </section>
+
+            {/* 3.9. Sticky-Trap Pest Vector Analyzer */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <StickyTrapAnalyzer />
             </section>
 
             {/* 4. Major Crops Section */}
