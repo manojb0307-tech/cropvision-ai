@@ -19,6 +19,7 @@ import { Footer } from './components/Footer';
 import { OutbreakMap } from './components/OutbreakMap';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import { CropRotation } from './components/CropRotation';
+import { NPKScanner } from './components/NPKScanner';
 
 import { Crop, DiseaseDiagnosis, MenuModalPage } from './types';
 import { analyzePlantImage, SAMPLE_DIAGNOSES } from './data/sampleDiagnoses';
@@ -147,6 +148,11 @@ export default function App() {
             {/* 3.6. Crop Rotation & Companion Planting AI */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <CropRotation />
+            </section>
+
+            {/* 3.7. NPK Chlorophyll Scanner */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <NPKScanner />
             </section>
 
             {/* 4. Major Crops Section */}
