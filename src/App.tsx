@@ -140,7 +140,8 @@ export default function App() {
             {/* Features Quick Navigation */}
             <div className="bg-white border-y border-slate-200 sticky top-0 z-30">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center space-x-1 overflow-x-auto py-2 scrollbar-hide">
+                <div className="flex items-center space-x-1 overflow-x-auto py-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
+                  <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
                   <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0 mr-1">Features:</span>
                   {[
                     { label: 'Disease Scanner', id: 'disease-scanner-section', icon: '🔍' },
