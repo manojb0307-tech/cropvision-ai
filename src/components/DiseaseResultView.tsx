@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { DiseaseDiagnosis } from '../types';
 import { DiseasePrognosis } from './DiseasePrognosis';
+import { CostEstimator } from './CostEstimator';
 
 interface DiseaseResultViewProps {
   diagnosis: DiseaseDiagnosis;
@@ -321,6 +322,15 @@ export const DiseaseResultView: React.FC<DiseaseResultViewProps> = ({
         {!diagnosis.isHealthy && (
           <DiseasePrognosis 
             diseaseName={diagnosis.diseaseName} 
+            severity={diagnosis.severityLevel || 'Moderate'} 
+          />
+        )}
+
+        {/* Cost & Yield Estimator */}
+        {!diagnosis.isHealthy && (
+          <CostEstimator 
+            crop={diagnosis.plantName} 
+            disease={diagnosis.diseaseName} 
             severity={diagnosis.severityLevel || 'Moderate'} 
           />
         )}

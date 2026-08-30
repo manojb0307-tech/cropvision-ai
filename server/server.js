@@ -24,6 +24,7 @@ import { generateReply } from './agriMind.js';
 import { analyzePlantImage as visionAnalyze } from './detectionEngine.js';
 import { generatePrognosis } from './prognosis.js';
 import { generateOutbreakMapData, addOutbreakReport } from './outbreakMap.js';
+import { calculateCostEstimate } from './costEstimator.js';
 
 dotenv.config();
 
@@ -1887,6 +1888,21 @@ app.post('/api/chat', async (req, res) => {
   } catch (err) {
     console.error('[/api/chat] Unhandled error:', err);
     return res.status(500).json({ error: 'Internal server error. Please try again.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/cost-estimate — Treatment Cost & Yield Loss Estimator
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/cost-estimate', (req, res) => {
+  try {
+    const { crop, disease, severity, areaHectares } = req.body || {};
+    if (!crop) return res.status(400).json({ error: 'crop is required' });
+    const result = calculateCostEstimate(crop, disease, severity || 'Moderate', areaHectares || 1);
+    res.json(result);
+  } catch (err) {
+    console.error('Cost estimate error:', err.message);
+    res.status(500).json({ error: 'Cost estimation failed' });
   }
 });
 
