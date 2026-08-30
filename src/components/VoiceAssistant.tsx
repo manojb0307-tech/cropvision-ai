@@ -35,9 +35,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const historyRef = useRef<ChatMessage[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
 
   const addDebug = useCallback((msg: string) => {
-    setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${msg}`]);
+    setDebugInfo(prev => [...prev.slice(-6), `${new Date().toLocaleTimeString()}: ${msg}`]);
   }, []);
 
   useEffect(() => {
@@ -57,31 +58,31 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     return () => {
       try { recognitionRef.current?.abort(); } catch {}
       synthRef.current?.cancel();
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(t => t.stop());
+        micStreamRef.current = null;
+      }
     };
   }, []);
 
   const speak = useCallback((text: string, lang: string) => {
-    if (!synthRef.current) {
-      addDebug('speechSynthesis not available');
-      return;
-    }
+    if (!synthRef.current) return;
     synthRef.current.cancel();
     const plainText = text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/#{1,6}\s/g, '').replace(/`[^`]+`/g, '');
     const utterance = new SpeechSynthesisUtterance(plainText);
     utterance.lang = lang;
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
-    utterance.onstart = () => { setIsSpeaking(true); addDebug('speaking started'); };
-    utterance.onend = () => { setIsSpeaking(false); addDebug('speaking ended'); };
-    utterance.onerror = (e: any) => { setIsSpeaking(false); addDebug('speak error: ' + e.error); };
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
     synthRef.current.speak(utterance);
-  }, [addDebug]);
+  }, []);
 
   const processQuery = useCallback(async (query: string, lang: string) => {
     if (!query.trim()) return;
     setProcessing(true);
     setError(null);
-    addDebug('processing: ' + query.substring(0, 40));
 
     const userMsg: ChatMessage = {
       id: `v-${Date.now()}`,
@@ -92,8 +93,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      const historyForAPI = historyRef.current;
-      const reply = await chatWithAIRemote(query, [...historyForAPI, userMsg]);
+      const reply = await chatWithAIRemote(query, [...historyRef.current, userMsg]);
       const botMsg: ChatMessage = {
         id: `v-${Date.now() + 1}`,
         sender: 'bot',
@@ -102,8 +102,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
       };
       setMessages(prev => [...prev, botMsg]);
       speak(reply, lang);
-    } catch (err: any) {
-      addDebug('query error: ' + (err.message || 'unknown'));
+    } catch {
       const fallback = 'Sorry, I could not process your request. Please try again.';
       setMessages(prev => [...prev, {
         id: `v-err-${Date.now()}`,
@@ -115,19 +114,19 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     } finally {
       setProcessing(false);
     }
-  }, [speak, addDebug]);
+  }, [speak]);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     setError(null);
     setTranscript('');
+    setDebugInfo([]);
     synthRef.current?.cancel();
     setIsSpeaking(false);
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      const msg = 'Speech recognition NOT supported in this browser. Use Chrome on desktop.';
-      setError(msg);
-      addDebug(msg);
+      setError('Speech recognition not supported. Please use Chrome or Edge.');
+      addDebug('SpeechRecognition API NOT found');
       return;
     }
     addDebug('SpeechRecognition API found');
@@ -136,6 +135,28 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
       recognitionRef.current?.abort();
     } catch {}
 
+    // Step 1: Explicitly request mic access via getUserMedia first
+    try {
+      addDebug('requesting mic via getUserMedia...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      addDebug('mic stream acquired, tracks: ' + stream.getTracks().length);
+      // Stop the stream tracks — SpeechRecognition will re-acquire its own
+      stream.getTracks().forEach(t => t.stop());
+      micStreamRef.current = null;
+    } catch (err: any) {
+      addDebug('getUserMedia failed: ' + err.name + ' - ' + err.message);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Microphone permission denied. Go to browser settings → Microphone → Allow this site, then refresh.');
+      } else if (err.name === 'NotFoundError') {
+        setError('No microphone found on this device.');
+      } else {
+        setError('Mic error: ' + err.name + ' - ' + err.message);
+      }
+      return;
+    }
+
+    // Step 2: Now start SpeechRecognition
     try {
       const recognition = new SR();
       recognition.lang = selectedLang.code;
@@ -144,7 +165,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
-        addDebug('recognition started, lang=' + selectedLang.code);
+        addDebug('recognition listening (lang=' + selectedLang.code + ')');
         setIsListening(true);
       };
 
@@ -161,8 +182,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
         }
         const display = finalT || interimT;
         setTranscript(display);
-        if (display) addDebug('heard: ' + display.substring(0, 50));
         if (finalT) {
+          addDebug('heard: ' + finalT.substring(0, 60));
           processQuery(finalT, selectedLang.code);
         }
       };
@@ -170,15 +191,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
       recognition.onerror = (event: any) => {
         addDebug('recognition error: ' + event.error);
         if (event.error === 'not-allowed') {
-          setError('Microphone blocked by browser. Click the lock icon in address bar → Microphone → Allow → then refresh the page.');
+          setError('Mic blocked. Go to edge://settings/content/microphone → Remove this site from Block list → Refresh page.');
         } else if (event.error === 'no-speech') {
-          setError('No speech detected. Tap the mic and try again.');
+          setError('No speech detected. Tap mic and try again.');
         } else if (event.error === 'network') {
           setError('Network error during speech recognition.');
-        } else if (event.error === 'aborted') {
-          addDebug('recognition aborted (normal)');
-        } else {
-          setError('Speech error: ' + event.error + '. Tap mic to retry.');
+        } else if (event.error !== 'aborted') {
+          setError('Speech error: ' + event.error);
         }
         setIsListening(false);
       };
@@ -190,10 +209,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
 
       recognitionRef.current = recognition;
       recognition.start();
-      addDebug('calling recognition.start()...');
+      addDebug('calling start()...');
     } catch (e: any) {
-      addDebug('start failed: ' + (e.message || e));
-      setError('Failed to start speech recognition: ' + (e.message || 'unknown'));
+      addDebug('start exception: ' + (e.message || e));
+      setError('Failed: ' + (e.message || 'unknown'));
       setIsListening(false);
     }
   }, [selectedLang, processQuery, addDebug]);
@@ -213,7 +232,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[85vh] flex flex-col">
-        {/* Header */}
         <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
             <Volume2 className="w-5 h-5" />
@@ -224,7 +242,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           </button>
         </div>
 
-        {/* Language Selector */}
         <div className="p-3 border-b border-slate-100 bg-slate-50 shrink-0">
           <div className="flex items-center space-x-2 overflow-x-auto pb-1">
             <Globe className="w-4 h-4 text-slate-400 shrink-0" />
@@ -245,7 +262,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           <p className="text-[10px] text-slate-500 mt-1">Speaking: {selectedLang.name}</p>
         </div>
 
-        {/* Conversation */}
         <div ref={chatEndRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
           {messages.length === 0 && !processing && (
             <div className="text-center text-slate-400 text-sm py-6">
@@ -279,7 +295,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           )}
         </div>
 
-        {/* Transcript */}
         {transcript && (
           <div className="px-4 pb-2 shrink-0">
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-xs text-emerald-700 italic">
@@ -288,7 +303,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="px-4 pb-2 shrink-0">
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-2 text-[11px] text-amber-700 flex items-start space-x-2">
@@ -298,7 +312,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           </div>
         )}
 
-        {/* Debug Log */}
         {debugInfo.length > 0 && (
           <div className="px-4 pb-2 shrink-0">
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 text-[9px] text-slate-500 font-mono max-h-20 overflow-y-auto">
@@ -307,7 +320,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           </div>
         )}
 
-        {/* Controls */}
         <div className="p-5 flex flex-col items-center space-y-3 shrink-0">
           {isSpeaking && (
             <button
