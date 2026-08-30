@@ -25,6 +25,7 @@ import { analyzePlantImage as visionAnalyze } from './detectionEngine.js';
 import { generatePrognosis } from './prognosis.js';
 import { generateOutbreakMapData, addOutbreakReport } from './outbreakMap.js';
 import { calculateCostEstimate } from './costEstimator.js';
+import { generateCropRotation } from './cropRotation.js';
 
 dotenv.config();
 
@@ -1888,6 +1889,21 @@ app.post('/api/chat', async (req, res) => {
   } catch (err) {
     console.error('[/api/chat] Unhandled error:', err);
     return res.status(500).json({ error: 'Internal server error. Please try again.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/crop-rotation — Crop Rotation & Companion Planting AI
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/crop-rotation', (req, res) => {
+  try {
+    const { crop, soilType, climate } = req.body || {};
+    if (!crop) return res.status(400).json({ error: 'crop is required' });
+    const result = generateCropRotation(crop, soilType, climate);
+    res.json(result);
+  } catch (err) {
+    console.error('Crop rotation error:', err.message);
+    res.status(500).json({ error: 'Rotation generation failed' });
   }
 });
 
