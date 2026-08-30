@@ -5,6 +5,7 @@ import {
   Sun, Leaf, Zap, Award
 } from 'lucide-react';
 import { DiseaseDiagnosis } from '../types';
+import { DiseasePrognosis } from './DiseasePrognosis';
 
 interface DiseaseResultViewProps {
   diagnosis: DiseaseDiagnosis;
@@ -315,6 +316,14 @@ export const DiseaseResultView: React.FC<DiseaseResultViewProps> = ({
           </div>
 
         </div>
+
+        {/* Disease Prognosis Simulator */}
+        {!diagnosis.isHealthy && (
+          <DiseasePrognosis 
+            diseaseName={diagnosis.diseaseName} 
+            severity={diagnosis.severityLevel || 'Moderate'} 
+          />
+        )}
 
         {/* Bottom Call to Action */}
         <div className="p-6 bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 rounded-3xl text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">

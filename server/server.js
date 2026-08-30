@@ -22,6 +22,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { generateReply } from './agriMind.js';
 import { analyzePlantImage as visionAnalyze } from './detectionEngine.js';
+import { generatePrognosis } from './prognosis.js';
 
 dotenv.config();
 
@@ -1885,6 +1886,27 @@ app.post('/api/chat', async (req, res) => {
   } catch (err) {
     console.error('[/api/chat] Unhandled error:', err);
     return res.status(500).json({ error: 'Internal server error. Please try again.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/prognosis — Disease & Weather Prognosis Simulator
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/prognosis', async (req, res) => {
+  try {
+    const { diseaseName, severity, lat, lng } = req.body || {};
+    if (!diseaseName) return res.status(400).json({ error: 'diseaseName is required' });
+
+    const result = await generatePrognosis(
+      diseaseName,
+      severity || 'Moderate',
+      lat || 20.5937,
+      lng || 78.9629
+    );
+    res.json(result);
+  } catch (err) {
+    console.error('Prognosis error:', err.message);
+    res.status(500).json({ error: 'Prognosis generation failed' });
   }
 });
 
