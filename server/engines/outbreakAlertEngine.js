@@ -214,6 +214,14 @@ export function generateOutbreakMapData(filters = {}) {
     clusters: clusters.slice(0, 10),
     hotspots,
     trends,
+    topDiseases: Object.entries(reports.reduce((acc, r) => {
+      if (!acc[r.disease]) acc[r.disease] = { name: r.disease, occurrences: 0, totalReports: 0, states: new Set() };
+      acc[r.disease].occurrences++;
+      acc[r.disease].totalReports += r.reports;
+      acc[r.disease].states.add(r.state);
+      return acc;
+    }, {})).map(([_, v]) => ({ name: v.name, occurrences: v.occurrences, totalReports: v.totalReports, states: [...v.states] }))
+      .sort((a, b) => b.totalReports - a.totalReports),
     recentAlerts: reports.filter(r => (new Date() - new Date(r.date)) < 5 * 86400000)
       .sort((a, b) => new Date(b.date) - new Date(a.date)),
   };

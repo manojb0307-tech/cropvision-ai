@@ -178,7 +178,7 @@ export const OutbreakMap: React.FC = () => {
             </svg>
             
             {/* Markers */}
-            {data.markers.map((marker) => {
+            {(data.markers || []).map((marker) => {
               const x = ((marker.lng - 68) / (98 - 68)) * 100;
               const y = ((marker.lat - 6) / (38 - 6)) * 100;
               const colors = severityColors[marker.severity] || severityColors.Moderate;
@@ -234,7 +234,7 @@ export const OutbreakMap: React.FC = () => {
               <span>Top Hotspots</span>
             </h4>
             <div className="space-y-2">
-              {data.hotspots.slice(0, 5).map((h, i) => (
+              {(data.hotspots || []).slice(0, 5).map((h, i) => (
                 <div key={i} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <span className="w-5 h-5 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center text-[10px] font-bold">
@@ -263,7 +263,7 @@ export const OutbreakMap: React.FC = () => {
               <span>Top Diseases</span>
             </h4>
             <div className="space-y-2">
-              {data.topDiseases.map((d, i) => (
+              {(data.topDiseases || []).map((d, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <div className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-red-500' : i === 1 ? 'bg-orange-500' : 'bg-amber-500'}`} />
