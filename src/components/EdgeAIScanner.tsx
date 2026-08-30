@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, Camera, Loader2, CheckCircle2, AlertTriangle, Smartphone } from 'lucide-react';
-import { analyzeOffline, loadEdgeAIModel, isModelLoaded, getModelStatus } from '../lib/edgeAI';
+import { analyzeOffline, loadEdgeAIModel, isModelLoaded, getModelStatus } from '../lib/edgeAIEngine';
 
 interface EdgeResult {
   source: string;

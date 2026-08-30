@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Leaf, AlertTriangle, CheckCircle2, Camera, Loader2, Info, Droplets
 } from 'lucide-react';
-import { analyzeNPK } from '../lib/npkScanner';
+import { analyzeNPK } from '../lib/npkScannerEngine';
 
 interface NPKResult {
   nitrogen: { level: string; value: number; color: string; confidence: number };

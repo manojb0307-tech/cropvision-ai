@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Bug, Camera, Loader2, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
-import { analyzeStickyTrap } from '../lib/stickyTrapAnalyzer';
+import { analyzeStickyTrap } from '../lib/stickyTrapEngine';
 
 interface TrapResult {
   trapColor: string;
