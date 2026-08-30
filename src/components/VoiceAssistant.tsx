@@ -29,11 +29,16 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const historyRef = useRef<ChatMessage[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const addDebug = useCallback((msg: string) => {
+    setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${msg}`]);
+  }, []);
 
   useEffect(() => {
     historyRef.current = messages;
@@ -50,31 +55,33 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
       synthRef.current = window.speechSynthesis;
     }
     return () => {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
-      }
+      try { recognitionRef.current?.abort(); } catch {}
       synthRef.current?.cancel();
     };
   }, []);
 
   const speak = useCallback((text: string, lang: string) => {
-    if (!synthRef.current) return;
+    if (!synthRef.current) {
+      addDebug('speechSynthesis not available');
+      return;
+    }
     synthRef.current.cancel();
     const plainText = text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/#{1,6}\s/g, '').replace(/`[^`]+`/g, '');
     const utterance = new SpeechSynthesisUtterance(plainText);
     utterance.lang = lang;
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    utterance.onstart = () => { setIsSpeaking(true); addDebug('speaking started'); };
+    utterance.onend = () => { setIsSpeaking(false); addDebug('speaking ended'); };
+    utterance.onerror = (e: any) => { setIsSpeaking(false); addDebug('speak error: ' + e.error); };
     synthRef.current.speak(utterance);
-  }, []);
+  }, [addDebug]);
 
   const processQuery = useCallback(async (query: string, lang: string) => {
     if (!query.trim()) return;
     setProcessing(true);
     setError(null);
+    addDebug('processing: ' + query.substring(0, 40));
 
     const userMsg: ChatMessage = {
       id: `v-${Date.now()}`,
@@ -95,7 +102,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
       };
       setMessages(prev => [...prev, botMsg]);
       speak(reply, lang);
-    } catch {
+    } catch (err: any) {
+      addDebug('query error: ' + (err.message || 'unknown'));
       const fallback = 'Sorry, I could not process your request. Please try again.';
       setMessages(prev => [...prev, {
         id: `v-err-${Date.now()}`,
@@ -107,83 +115,91 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     } finally {
       setProcessing(false);
     }
-  }, [speak]);
+  }, [speak, addDebug]);
 
   const startListening = useCallback(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setError('Speech recognition not supported. Use Chrome or Edge.');
-      return;
-    }
-
-    synthRef.current?.cancel();
-    setIsSpeaking(false);
     setError(null);
     setTranscript('');
+    synthRef.current?.cancel();
+    setIsSpeaking(false);
+
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      const msg = 'Speech recognition NOT supported in this browser. Use Chrome on desktop.';
+      setError(msg);
+      addDebug(msg);
+      return;
+    }
+    addDebug('SpeechRecognition API found');
 
     try {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
+      recognitionRef.current?.abort();
     } catch {}
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = selectedLang.code;
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: any) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const text = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += text;
-        } else {
-          interimTranscript += text;
-        }
-      }
-      setTranscript(finalTranscript || interimTranscript);
-      if (finalTranscript) {
-        processQuery(finalTranscript, selectedLang.code);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      if (event.error === 'not-allowed') {
-        setError('Microphone blocked. Click the lock icon in address bar and allow mic.');
-      } else if (event.error === 'no-speech') {
-        setError('No speech detected. Tap mic and try speaking.');
-      } else if (event.error === 'network') {
-        setError('Network error. Check your connection.');
-      } else if (event.error !== 'aborted') {
-        setError(`Error: ${event.error}. Tap mic to retry.`);
-      }
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-
     try {
+      const recognition = new SR();
+      recognition.lang = selectedLang.code;
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        addDebug('recognition started, lang=' + selectedLang.code);
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let finalT = '';
+        let interimT = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalT += t;
+          } else {
+            interimT += t;
+          }
+        }
+        const display = finalT || interimT;
+        setTranscript(display);
+        if (display) addDebug('heard: ' + display.substring(0, 50));
+        if (finalT) {
+          processQuery(finalT, selectedLang.code);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        addDebug('recognition error: ' + event.error);
+        if (event.error === 'not-allowed') {
+          setError('Microphone blocked by browser. Click the lock icon in address bar → Microphone → Allow → then refresh the page.');
+        } else if (event.error === 'no-speech') {
+          setError('No speech detected. Tap the mic and try again.');
+        } else if (event.error === 'network') {
+          setError('Network error during speech recognition.');
+        } else if (event.error === 'aborted') {
+          addDebug('recognition aborted (normal)');
+        } else {
+          setError('Speech error: ' + event.error + '. Tap mic to retry.');
+        }
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        addDebug('recognition ended');
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
       recognition.start();
-      setIsListening(true);
-    } catch (e) {
-      console.error('Failed to start recognition:', e);
-      setError('Failed to start mic. Tap mic to retry.');
+      addDebug('calling recognition.start()...');
+    } catch (e: any) {
+      addDebug('start failed: ' + (e.message || e));
+      setError('Failed to start speech recognition: ' + (e.message || 'unknown'));
       setIsListening(false);
     }
-  }, [selectedLang, processQuery]);
+  }, [selectedLang, processQuery, addDebug]);
 
   const stopListening = useCallback(() => {
-    try {
-      recognitionRef.current?.stop();
-    } catch {}
+    try { recognitionRef.current?.stop(); } catch {}
     setIsListening(false);
   }, []);
 
@@ -229,7 +245,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           <p className="text-[10px] text-slate-500 mt-1">Speaking: {selectedLang.name}</p>
         </div>
 
-        {/* Conversation Area */}
+        {/* Conversation */}
         <div ref={chatEndRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
           {messages.length === 0 && !processing && (
             <div className="text-center text-slate-400 text-sm py-6">
@@ -246,7 +262,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
                   ? 'bg-emerald-600 text-white rounded-br-sm'
                   : 'bg-slate-100 text-slate-800 rounded-bl-sm'
               }`}>
-                {msg.text.split('\n').filter((l) => l.trim()).map((line, i) => (
+                {msg.text.split('\n').filter((l: string) => l.trim()).map((line: string, i: number) => (
                   <p key={i} className={i > 0 ? 'mt-1.5' : ''}>{line}</p>
                 ))}
               </div>
@@ -263,11 +279,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
           )}
         </div>
 
-        {/* Live Transcript */}
+        {/* Transcript */}
         {transcript && (
           <div className="px-4 pb-2 shrink-0">
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-xs text-emerald-700 italic">
-              "{transcript}"
+              &quot;{transcript}&quot;
             </div>
           </div>
         )}
@@ -275,9 +291,18 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
         {/* Error */}
         {error && (
           <div className="px-4 pb-2 shrink-0">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2 text-xs text-amber-700 flex items-start space-x-2">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2 text-[11px] text-amber-700 flex items-start space-x-2">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>{error}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Debug Log */}
+        {debugInfo.length > 0 && (
+          <div className="px-4 pb-2 shrink-0">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 text-[9px] text-slate-500 font-mono max-h-20 overflow-y-auto">
+              {debugInfo.map((d, i) => <div key={i}>{d}</div>)}
             </div>
           </div>
         )}
