@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, Globe, Loader2, X } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Globe, Loader2, X, Send, MessageCircle } from 'lucide-react';
 import { chatWithAIRemote } from '../lib/api';
 import { ChatMessage } from '../types';
 
@@ -39,18 +39,28 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
   const [processing, setProcessing] = useState(false);
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [textInput, setTextInput] = useState('');
+  const [speechSupported, setSpeechSupported] = useState<boolean | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  }, [history, processing, isOpen]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       synthRef.current = window.speechSynthesis;
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      setSpeechSupported(!!SR);
     }
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
+      if (recognitionRef.current) recognitionRef.current.abort();
       synthRef.current?.cancel();
     };
   }, []);
@@ -58,7 +68,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
   const speak = useCallback((text: string) => {
     if (!synthRef.current) return;
     synthRef.current.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const plainText = text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/#{1,6}\s/g, '');
+    const utterance = new SpeechSynthesisUtterance(plainText);
     utterance.lang = selectedLang.code;
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
@@ -93,7 +104,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
       };
       setHistory(prev => [...prev, botMsg]);
     } catch {
-      const fallback = 'I apologize, I could not process your request. Please try again.';
+      const fallback = 'Sorry, I could not process your request. Please try again.';
       setResponse(fallback);
       speak(fallback);
     } finally {
@@ -104,9 +115,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
   const startListening = useCallback(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
+      setError('Speech recognition is not supported in this browser. Please type your question below.');
       return;
     }
+
+    synthRef.current?.cancel();
+    setIsSpeaking(false);
 
     const recognition = new SpeechRecognition();
     recognition.lang = selectedLang.code;
@@ -131,8 +145,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error !== 'no-speech') {
-        setError(`Recognition error: ${event.error}`);
+      if (event.error === 'not-allowed') {
+        setError('Microphone access denied. Please allow microphone in browser settings, or type your question below.');
+      } else if (event.error === 'no-speech') {
+        setError('No speech detected. Please try again or type your question.');
+      } else if (event.error !== 'aborted') {
+        setError(`Recognition error: ${event.error}. You can type your question instead.`);
       }
       setIsListening(false);
     };
@@ -146,6 +164,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     setIsListening(true);
     setTranscript('');
     setResponse('');
+    setError(null);
   }, [selectedLang, processQuery]);
 
   const stopListening = useCallback(() => {
@@ -158,16 +177,33 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
     setIsSpeaking(false);
   }, []);
 
+  const handleTextSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!textInput.trim() || processing) return;
+    const text = textInput.trim();
+    setTextInput('');
+    processQuery(text);
+  }, [textInput, processing, processQuery]);
+
+  const quickQuestions = [
+    'How to treat rice blast disease?',
+    'What fertilizer for wheat?',
+    'Best organic pest control?',
+  ];
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between">
+        <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
             <Volume2 className="w-5 h-5" />
             <h3 className="font-heading font-bold text-sm">Voice Assistant</h3>
+            {speechSupported === false && (
+              <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full">Text Mode</span>
+            )}
           </div>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-lg cursor-pointer">
             <X className="w-4 h-4" />
@@ -175,7 +211,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
         </div>
 
         {/* Language Selector */}
-        <div className="p-3 border-b border-slate-100 bg-slate-50">
+        <div className="p-3 border-b border-slate-100 bg-slate-50 shrink-0">
           <div className="flex items-center space-x-2 overflow-x-auto pb-1">
             <Globe className="w-4 h-4 text-slate-400 shrink-0" />
             {LANGUAGES.map((lang) => (
@@ -196,12 +232,23 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
         </div>
 
         {/* Conversation Area */}
-        <div className="h-64 overflow-y-auto p-4 space-y-3">
+        <div ref={chatEndRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
           {history.length === 0 && !processing && (
-            <div className="text-center text-slate-400 text-sm py-8">
-              <Mic className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>Tap the microphone and ask about any crop disease</p>
-              <p className="text-xs mt-1">e.g., "What is rice blast?"</p>
+            <div className="text-center text-slate-400 text-sm py-4">
+              <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="font-medium">Ask about any crop disease</p>
+              <p className="text-xs mt-1">Use the microphone or type below</p>
+              <div className="mt-3 space-y-1.5">
+                {quickQuestions.map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setTextInput(q); processQuery(q); }}
+                    className="block w-full text-left px-3 py-2 bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl text-xs transition-all cursor-pointer"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -212,7 +259,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
                   ? 'bg-emerald-600 text-white rounded-br-sm'
                   : 'bg-slate-100 text-slate-800 rounded-bl-sm'
               }`}>
-                {msg.text}
+                {msg.text.split('\n').map((line, i) => (
+                  <p key={i} className={i > 0 ? 'mt-1' : ''}>{line}</p>
+                ))}
               </div>
             </div>
           ))}
@@ -229,7 +278,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
 
         {/* Transcript Display */}
         {transcript && (
-          <div className="px-4 pb-2">
+          <div className="px-4 pb-2 shrink-0">
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-xs text-emerald-700">
               {transcript}
             </div>
@@ -238,41 +287,63 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ isOpen, onClose 
 
         {/* Error Display */}
         {error && (
-          <div className="px-4 pb-2">
+          <div className="px-4 pb-2 shrink-0">
             <div className="bg-red-50 border border-red-200 rounded-xl p-2 text-xs text-red-600">
               {error}
             </div>
           </div>
         )}
 
-        {/* Controls */}
-        <div className="p-4 flex items-center justify-center space-x-4">
+        {/* Text Input */}
+        <form onSubmit={handleTextSubmit} className="px-4 pb-2 shrink-0">
+          <div className="flex items-center space-x-2 bg-slate-50 rounded-xl border border-slate-200 px-3 py-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="Type your question..."
+              disabled={processing}
+              className="flex-1 bg-transparent text-xs text-slate-800 outline-none placeholder:text-slate-400"
+            />
+            <button
+              type="submit"
+              disabled={!textInput.trim() || processing}
+              className="p-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-lg cursor-pointer disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </form>
+
+        {/* Mic Controls */}
+        <div className="p-4 flex items-center justify-center space-x-4 shrink-0 border-t border-slate-100">
           {isSpeaking && (
             <button
               onClick={stopSpeaking}
-              className="p-3 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-full cursor-pointer"
+              className="p-3 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-full cursor-pointer transition-colors"
             >
               <VolumeX className="w-5 h-5" />
             </button>
           )}
 
-          <button
-            onClick={isListening ? stopListening : startListening}
-            disabled={processing}
-            className={`p-5 rounded-full shadow-lg transition-all cursor-pointer ${
-              isListening
-                ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-            } ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-          </button>
+          {speechSupported !== false && (
+            <button
+              onClick={isListening ? stopListening : startListening}
+              disabled={processing}
+              className={`p-5 rounded-full shadow-lg transition-all cursor-pointer ${
+                isListening
+                  ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              } ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+            </button>
+          )}
 
-          <div className="text-center">
-            <p className="text-[10px] text-slate-400 mt-2">
-              {isListening ? 'Listening... Tap to stop' : 'Tap to speak'}
-            </p>
-          </div>
+          <p className="text-[10px] text-slate-400 text-center">
+            {isListening ? 'Listening...' : speechSupported === false ? 'Type above' : 'Tap mic or type'}
+          </p>
         </div>
       </div>
     </div>
